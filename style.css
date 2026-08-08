@@ -34,6 +34,7 @@ h2 { font-size:clamp(36px,5vw,64px); line-height:1; margin:0; letter-spacing:-.0
 .text-button:hover { color:var(--acid); }
 .notice { margin:22px 0; padding:14px 18px; border-left:2px solid var(--cyan); background:rgba(83,224,209,.06); display:flex; gap:18px; color:var(--muted); }
 .notice strong { color:var(--cyan); font-size:11px; letter-spacing:.12em; }
+.error-banner { margin:0 0 22px; padding:12px 16px; border:1px solid rgba(255,105,105,.5); border-left:3px solid var(--danger); color:#ffd1d1; background:rgba(255,105,105,.08); }
 .slot-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding-bottom:50px; }
 .panel,.player-slot { border:1px solid var(--line); background:rgba(14,23,22,.88); padding:22px; }
 .slot-header,.status-line { display:flex; align-items:center; gap:12px; }

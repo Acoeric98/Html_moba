@@ -6,10 +6,24 @@ const statusClass = status => status.toLowerCase().replaceAll(' ', '-');
 let hostNetwork;
 
 function showView(id) { views.forEach(selector => $(selector).classList.toggle('hidden', selector !== id)); }
-function reportError(message) { console.error(message); window.alert(message); }
-function copyText(value, button) {
+function reportError(message, view = 'client') {
+  console.error(message);
+  const banner = $(`#${view}-error`);
+  if (!banner) return;
+  banner.textContent = message;
+  banner.classList.remove('hidden');
+}
+function clearError(view) { const banner = $(`#${view}-error`); if (banner) { banner.textContent = ''; banner.classList.add('hidden'); } }
+async function copyText(value, button, source) {
   if (!value) return;
-  navigator.clipboard.writeText(value).then(() => { const old = button.textContent; button.textContent = 'COPIED'; setTimeout(() => button.textContent = old, 1200); }).catch(() => reportError('Clipboard access was denied. Select and copy the key manually.'));
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    source.focus(); source.select();
+    reportError('Clipboard access was denied. The key has been selected so you can copy it manually.', button.closest('#host-view') ? 'host' : 'client');
+    return;
+  }
+  const old = button.textContent; button.textContent = 'COPIED'; setTimeout(() => button.textContent = old, 1200);
 }
 function appendMessage(log, sender, text, sent = false) {
   log.querySelector('.empty-log')?.remove();
@@ -33,27 +47,28 @@ function setHostStatus(playerId, status) {
   slot.querySelector('.slot-messages').classList.toggle('hidden', status !== 'CONNECTED');
 }
 function initializeHost() {
+  clearError('host');
   buildHostSlots();
-  hostNetwork = new HostNetwork({ onStatus:setHostStatus, onMessage:(id,text) => appendMessage($(`[data-player="${id}"] .message-log`), `PLAYER ${id}`, text), onError:(id,error) => reportError(`Player ${id}: ${error.message}`) });
+  hostNetwork = new HostNetwork({ onStatus:setHostStatus, onMessage:(id,text) => appendMessage($(`[data-player="${id}"] .message-log`), `PLAYER ${id}`, text), onError:(id,error) => reportError(`Player ${id}: ${error.message}`, 'host') });
 }
 
 const clientNetwork = new ClientNetwork({
   onStatus: status => { $('#client-status').textContent = status; $('#client-status-dot').className = `status-dot ${statusClass(status)}`; const enabled = status === 'CONNECTED'; $('#client-message').disabled = !enabled; $('#client-message-form button').disabled = !enabled; },
-  onMessage: text => appendMessage($('#client-log'), 'HOST', text), onError: error => reportError(error.message)
+  onMessage: text => appendMessage($('#client-log'), 'HOST', text), onError: error => reportError(error.message, 'client')
 });
 
 $('#create-host').addEventListener('click', () => { initializeHost(); showView('#host-view'); });
-$('#join-host').addEventListener('click', () => showView('#client-view'));
+$('#join-host').addEventListener('click', () => { clearError('client'); showView('#client-view'); });
 document.querySelectorAll('.back-button').forEach(button => button.addEventListener('click', () => { hostNetwork?.closeAll(); clientNetwork.close(); showView('#main-menu'); }));
 $('#host-slots').addEventListener('click', async event => {
   const slot = event.target.closest('.player-slot'); if (!slot) return; const id = Number(slot.dataset.player);
   try {
     if (event.target.closest('.generate')) { const button = event.target; button.disabled = true; slot.querySelector('.offer').value = await hostNetwork.generateOffer(id); slot.querySelector('.copy-offer').disabled = false; button.disabled = false; }
-    if (event.target.closest('.copy-offer')) copyText(slot.querySelector('.offer').value, event.target);
+    if (event.target.closest('.copy-offer')) copyText(slot.querySelector('.offer').value, event.target, slot.querySelector('.offer'));
     if (event.target.closest('.apply')) await hostNetwork.applyAnswer(id, slot.querySelector('.answer').value);
-  } catch (error) { reportError(error.message); event.target.disabled = false; }
+  } catch (error) { reportError(error.message, 'host'); event.target.disabled = false; }
 });
-$('#host-slots').addEventListener('submit', event => { event.preventDefault(); const slot = event.target.closest('.player-slot'); const input = event.target.querySelector('input'); if (!input.value.trim()) return; try { hostNetwork.send(Number(slot.dataset.player), input.value.trim()); appendMessage(slot.querySelector('.message-log'), 'HOST', input.value.trim(), true); input.value = ''; } catch (error) { reportError(error.message); } });
+$('#host-slots').addEventListener('submit', event => { event.preventDefault(); const slot = event.target.closest('.player-slot'); const input = event.target.querySelector('input'); if (!input.value.trim()) return; try { hostNetwork.send(Number(slot.dataset.player), input.value.trim()); appendMessage(slot.querySelector('.message-log'), 'HOST', input.value.trim(), true); input.value = ''; } catch (error) { reportError(error.message, 'host'); } });
 $('#generate-answer').addEventListener('click', async event => { try { event.target.disabled = true; $('#client-answer').value = await clientNetwork.generateAnswer($('#client-offer').value); $('#copy-answer').disabled = false; } catch (error) { reportError(error.message); } finally { event.target.disabled = false; } });
-$('#copy-answer').addEventListener('click', event => copyText($('#client-answer').value, event.target));
+$('#copy-answer').addEventListener('click', event => copyText($('#client-answer').value, event.target, $('#client-answer')));
 $('#client-message-form').addEventListener('submit', event => { event.preventDefault(); const input = $('#client-message'); if (!input.value.trim()) return; try { clientNetwork.send(input.value.trim()); appendMessage($('#client-log'), 'YOU', input.value.trim(), true); input.value = ''; } catch (error) { reportError(error.message); } });

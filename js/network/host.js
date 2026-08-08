@@ -8,9 +8,10 @@ class HostNetwork {
     this.closePeer(playerId);
     const peer = hostPeer.createPeerConnection(status => this.onStatus(playerId, status));
     const reliable = peer.createDataChannel('reliable', { ordered: true });
-    peer.createDataChannel('fast', { ordered: false, maxRetransmits: 0 });
+    const fast = peer.createDataChannel('fast', { ordered: false, maxRetransmits: 0 });
+    hostPeer.configureFastChannel(fast);
     hostPeer.configureReliableChannel(reliable, raw => this.receive(playerId, raw), status => this.onStatus(playerId, status));
-    this.peers.set(playerId, { connection: peer, reliable });
+    this.peers.set(playerId, { connection: peer, reliable, fast });
     try {
       await peer.setLocalDescription(await peer.createOffer());
       this.onStatus(playerId, 'OFFER CREATED');

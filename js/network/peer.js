@@ -2,12 +2,19 @@ const PEER_CONFIG = { iceServers: [] };
 
 function createPeerConnection(onStatusChange) {
   const peerConnection = new RTCPeerConnection(PEER_CONFIG);
-  const report = () => onStatusChange(peerConnection.connectionState.toUpperCase());
+  const report = () => {
+    const state = peerConnection.connectionState.toUpperCase();
+    onStatusChange(state === 'CLOSED' ? 'DISCONNECTED' : state);
+  };
   peerConnection.addEventListener('connectionstatechange', report);
   peerConnection.addEventListener('iceconnectionstatechange', () => {
     if (peerConnection.iceConnectionState === 'failed') onStatusChange('FAILED');
   });
   return peerConnection;
+}
+
+function configureFastChannel(channel, onMessage = () => {}) {
+  channel.addEventListener('message', event => onMessage(String(event.data)));
 }
 
 function configureReliableChannel(channel, onMessage, onStatusChange) {
@@ -29,4 +36,4 @@ function readTextPacket(raw) {
   } catch { return null; }
 }
 
-window.Riftlink = { ...(window.Riftlink || {}), peer: { createPeerConnection, configureReliableChannel, sendText, readTextPacket } };
+window.Riftlink = { ...(window.Riftlink || {}), peer: { createPeerConnection, configureReliableChannel, configureFastChannel, sendText, readTextPacket } };
