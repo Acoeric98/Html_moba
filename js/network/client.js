@@ -2,7 +2,7 @@ const clientPeer = window.Riftlink.peer;
 const clientSignaling = window.Riftlink.signaling;
 
 class ClientNetwork {
-  constructor({ onStatus, onMessage, onError }) { this.onStatus = onStatus; this.onMessage = onMessage; this.onError = onError; this.connection = null; this.reliable = null; this.fast = null; }
+  constructor({ onStatus, onMessage, onPing, onError }) { this.onStatus = onStatus; this.onMessage = onMessage; this.onPing = onPing; this.onError = onError; this.connection = null; this.reliable = null; this.fast = null; this.pendingPings = new Map(); }
   async generateAnswer(offerKey) {
     this.close();
     const peer = clientPeer.createPeerConnection(this.onStatus);
@@ -20,8 +20,15 @@ class ClientNetwork {
     } catch (error) { this.onStatus('FAILED'); this.onError(error); this.close(false); throw error; }
   }
   send(text) { clientPeer.sendText(this.reliable, text); }
-  receive(raw) { const text = clientPeer.readTextPacket(raw); if (text !== null) this.onMessage(text); }
-  close(report = true) { if (this.connection) this.connection.close(); this.connection = null; this.reliable = null; this.fast = null; if (report) this.onStatus('IDLE'); }
+  ping() { const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`; clientPeer.sendPacket(this.reliable, { type: 'PING', id }); this.pendingPings.set(id, performance.now()); }
+  receive(raw) {
+    const packet = clientPeer.readPacket(raw);
+    if (!packet) return;
+    if (packet.type === 'CHAT') this.onMessage(packet.text);
+    if (packet.type === 'PING') clientPeer.sendPacket(this.reliable, { type: 'PONG', id: packet.id });
+    if (packet.type === 'PONG' && this.pendingPings.has(packet.id)) { const roundTripMs = Math.round(performance.now() - this.pendingPings.get(packet.id)); this.pendingPings.delete(packet.id); this.onPing(roundTripMs); }
+  }
+  close(report = true) { if (this.connection) this.connection.close(); this.connection = null; this.reliable = null; this.fast = null; this.pendingPings.clear(); if (report) this.onStatus('IDLE'); }
 }
 
 window.Riftlink.ClientNetwork = ClientNetwork;

@@ -2,7 +2,7 @@ const hostPeer = window.Riftlink.peer;
 const hostSignaling = window.Riftlink.signaling;
 
 class HostNetwork {
-  constructor({ onStatus, onMessage, onError }) { this.peers = new Map(); this.onStatus = onStatus; this.onMessage = onMessage; this.onError = onError; }
+  constructor({ onStatus, onMessage, onPing, onError }) { this.peers = new Map(); this.onStatus = onStatus; this.onMessage = onMessage; this.onPing = onPing; this.onError = onError; }
 
   async generateOffer(playerId) {
     this.closePeer(playerId);
@@ -11,7 +11,7 @@ class HostNetwork {
     const fast = peer.createDataChannel('fast', { ordered: false, maxRetransmits: 0 });
     hostPeer.configureFastChannel(fast);
     hostPeer.configureReliableChannel(reliable, raw => this.receive(playerId, raw), status => this.onStatus(playerId, status));
-    this.peers.set(playerId, { connection: peer, reliable, fast });
+    this.peers.set(playerId, { connection: peer, reliable, fast, pendingPings: new Map() });
     try {
       await peer.setLocalDescription(await peer.createOffer());
       this.onStatus(playerId, 'OFFER CREATED');
@@ -29,7 +29,24 @@ class HostNetwork {
   }
 
   send(playerId, text) { hostPeer.sendText(this.peers.get(playerId)?.reliable, text); }
-  receive(playerId, raw) { const text = hostPeer.readTextPacket(raw); if (text !== null) this.onMessage(playerId, text); }
+  ping(playerId) {
+    const entry = this.peers.get(playerId);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    hostPeer.sendPacket(entry?.reliable, { type: 'PING', id });
+    entry.pendingPings.set(id, performance.now());
+  }
+  receive(playerId, raw) {
+    const entry = this.peers.get(playerId);
+    const packet = hostPeer.readPacket(raw);
+    if (!packet) return;
+    if (packet.type === 'CHAT') this.onMessage(playerId, packet.text);
+    if (packet.type === 'PING') hostPeer.sendPacket(entry?.reliable, { type: 'PONG', id: packet.id });
+    if (packet.type === 'PONG' && entry?.pendingPings.has(packet.id)) {
+      const roundTripMs = Math.round(performance.now() - entry.pendingPings.get(packet.id));
+      entry.pendingPings.delete(packet.id);
+      this.onPing(playerId, roundTripMs);
+    }
+  }
   closePeer(playerId) { const entry = this.peers.get(playerId); if (entry) entry.connection.close(); this.peers.delete(playerId); }
   closeAll() { for (const id of this.peers.keys()) this.closePeer(id); }
 }

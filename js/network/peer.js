@@ -25,15 +25,21 @@ function configureReliableChannel(channel, onMessage, onStatusChange) {
 }
 
 function sendText(channel, text) {
-  if (!channel || channel.readyState !== 'open') throw new Error('The reliable data channel is not connected.');
-  channel.send(JSON.stringify({ type: 'CHAT', text, sentAt: Date.now() }));
+  sendPacket(channel, { type: 'CHAT', text, sentAt: Date.now() });
 }
 
-function readTextPacket(raw) {
+function sendPacket(channel, packet) {
+  if (!channel || channel.readyState !== 'open') throw new Error('The reliable data channel is not connected.');
+  channel.send(JSON.stringify(packet));
+}
+
+function readPacket(raw) {
   try {
     const packet = JSON.parse(raw);
-    return packet?.type === 'CHAT' && typeof packet.text === 'string' ? packet.text.slice(0, 500) : null;
+    if (packet?.type === 'CHAT' && typeof packet.text === 'string') return { ...packet, text: packet.text.slice(0, 500) };
+    if ((packet?.type === 'PING' || packet?.type === 'PONG') && typeof packet.id === 'string') return packet;
+    return null;
   } catch { return null; }
 }
 
-window.Riftlink = { ...(window.Riftlink || {}), peer: { createPeerConnection, configureReliableChannel, configureFastChannel, sendText, readTextPacket } };
+window.Riftlink = { ...(window.Riftlink || {}), peer: { createPeerConnection, configureReliableChannel, configureFastChannel, sendText, sendPacket, readPacket } };

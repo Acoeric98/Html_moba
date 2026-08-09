@@ -37,7 +37,7 @@ function buildHostSlots() {
   const container = $('#host-slots'); container.replaceChildren();
   for (let playerId = 1; playerId <= 6; playerId++) {
     const slot = document.createElement('article'); slot.className = 'player-slot'; slot.dataset.player = playerId;
-    slot.innerHTML = `<div class="slot-header"><div><h3>PLAYER ${String(playerId).padStart(2,'0')}</h3><span class="team">${playerId <= 3 ? 'BLUE' : 'RED'} TEAM</span></div><span class="status-badge"><i class="status-dot empty"></i> <b>EMPTY</b></span></div><button class="primary-button compact generate">GENERATE OFFER</button><label>HOST OFFER KEY</label><textarea class="offer" readonly placeholder="Generate an offer..."></textarea><div class="slot-actions"><button class="secondary-button compact copy-offer" disabled>COPY OFFER</button></div><label>PLAYER ANSWER KEY</label><textarea class="answer" placeholder="Paste this player's answer..."></textarea><button class="secondary-button compact apply">APPLY ANSWER</button><div class="slot-messages hidden"><div class="message-log"><p class="empty-log">No messages yet.</p></div><form class="message-form"><input maxlength="500" placeholder="Message Player ${playerId}..."><button>SEND</button></form></div>`;
+    slot.innerHTML = `<div class="slot-header"><div><h3>PLAYER ${String(playerId).padStart(2,'0')}</h3><span class="team">${playerId <= 3 ? 'BLUE' : 'RED'} TEAM</span></div><span class="status-badge"><i class="status-dot empty"></i> <b>EMPTY</b></span></div><button class="primary-button compact generate">GENERATE OFFER</button><label>HOST OFFER KEY</label><textarea class="offer" readonly placeholder="Generate an offer..."></textarea><div class="slot-actions"><button class="secondary-button compact copy-offer" disabled>COPY OFFER</button></div><label>PLAYER ANSWER KEY</label><textarea class="answer" placeholder="Paste this player's answer..."></textarea><button class="secondary-button compact apply">APPLY ANSWER</button><div class="slot-messages hidden"><div class="ping-controls"><button class="secondary-button compact ping" type="button">PING PLAYER</button><span>ROUND TRIP: <b class="ping-value">—</b></span></div><div class="message-log"><p class="empty-log">No messages yet.</p></div><form class="message-form"><input maxlength="500" placeholder="Message Player ${playerId}..."><button>SEND</button></form></div>`;
     container.append(slot);
   }
 }
@@ -49,12 +49,12 @@ function setHostStatus(playerId, status) {
 function initializeHost() {
   clearError('host');
   buildHostSlots();
-  hostNetwork = new HostNetwork({ onStatus:setHostStatus, onMessage:(id,text) => appendMessage($(`[data-player="${id}"] .message-log`), `PLAYER ${id}`, text), onError:(id,error) => reportError(`Player ${id}: ${error.message}`, 'host') });
+  hostNetwork = new HostNetwork({ onStatus:setHostStatus, onMessage:(id,text) => appendMessage($(`[data-player="${id}"] .message-log`), `PLAYER ${id}`, text), onPing:(id,ms) => $(`[data-player="${id}"] .ping-value`).textContent = `${ms} ms`, onError:(id,error) => reportError(`Player ${id}: ${error.message}`, 'host') });
 }
 
 const clientNetwork = new ClientNetwork({
-  onStatus: status => { $('#client-status').textContent = status; $('#client-status-dot').className = `status-dot ${statusClass(status)}`; const enabled = status === 'CONNECTED'; $('#client-message').disabled = !enabled; $('#client-message-form button').disabled = !enabled; },
-  onMessage: text => appendMessage($('#client-log'), 'HOST', text), onError: error => reportError(error.message, 'client')
+  onStatus: status => { $('#client-status').textContent = status; $('#client-status-dot').className = `status-dot ${statusClass(status)}`; const enabled = status === 'CONNECTED'; $('#client-message').disabled = !enabled; $('#client-message-form button').disabled = !enabled; $('#client-ping-button').disabled = !enabled; },
+  onMessage: text => appendMessage($('#client-log'), 'HOST', text), onPing: ms => $('#client-ping').textContent = `${ms} ms`, onError: error => reportError(error.message, 'client')
 });
 
 $('#create-host').addEventListener('click', () => { initializeHost(); showView('#host-view'); });
@@ -66,9 +66,12 @@ $('#host-slots').addEventListener('click', async event => {
     if (event.target.closest('.generate')) { const button = event.target; button.disabled = true; slot.querySelector('.offer').value = await hostNetwork.generateOffer(id); slot.querySelector('.copy-offer').disabled = false; button.disabled = false; }
     if (event.target.closest('.copy-offer')) copyText(slot.querySelector('.offer').value, event.target, slot.querySelector('.offer'));
     if (event.target.closest('.apply')) await hostNetwork.applyAnswer(id, slot.querySelector('.answer').value);
+    if (event.target.closest('.ping')) hostNetwork.ping(id);
   } catch (error) { reportError(error.message, 'host'); event.target.disabled = false; }
 });
 $('#host-slots').addEventListener('submit', event => { event.preventDefault(); const slot = event.target.closest('.player-slot'); const input = event.target.querySelector('input'); if (!input.value.trim()) return; try { hostNetwork.send(Number(slot.dataset.player), input.value.trim()); appendMessage(slot.querySelector('.message-log'), 'HOST', input.value.trim(), true); input.value = ''; } catch (error) { reportError(error.message, 'host'); } });
 $('#generate-answer').addEventListener('click', async event => { try { event.target.disabled = true; $('#client-answer').value = await clientNetwork.generateAnswer($('#client-offer').value); $('#copy-answer').disabled = false; } catch (error) { reportError(error.message); } finally { event.target.disabled = false; } });
 $('#copy-answer').addEventListener('click', event => copyText($('#client-answer').value, event.target, $('#client-answer')));
 $('#client-message-form').addEventListener('submit', event => { event.preventDefault(); const input = $('#client-message'); if (!input.value.trim()) return; try { clientNetwork.send(input.value.trim()); appendMessage($('#client-log'), 'YOU', input.value.trim(), true); input.value = ''; } catch (error) { reportError(error.message); } });
+
+$('#client-ping-button').addEventListener('click', () => { try { clientNetwork.ping(); } catch (error) { reportError(error.message); } });
