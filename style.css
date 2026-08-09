@@ -72,3 +72,7 @@ button:disabled { opacity:.35; cursor:not-allowed; transform:none !important; }
 footer { min-height:60px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; color:#51615d; font:9px monospace; letter-spacing:.14em; }
 @keyframes enter { from { opacity:0; transform:translateY(8px); } }
 @media(max-width:800px) { .slot-grid,.client-grid { grid-template-columns:1fr; } .menu-actions,.feature-row { flex-direction:column; } .feature-row { gap:12px; } .section-heading { align-items:center; } .network-pill { display:none; } }
+.ping-controls { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font:10px monospace; }
+.ping-controls .ping-value,.ping-readout strong { color:var(--cyan); }
+.ping-readout { margin-left:auto; }
+#client-ping-button { min-height:36px; }
